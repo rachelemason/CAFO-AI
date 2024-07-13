@@ -1,10 +1,38 @@
-
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.applications.vgg16 import preprocess_input
+import ee
 
+
+def write_to_file(fc, filename, folder):
+
+  task = ee.batch.Export.table.toDrive(
+        collection=fc,
+        description=filename,
+        folder=folder,
+        fileFormat='GeoJSON',
+    )
+
+  task.start()
+
+def ee_task_status():
+  tasks = ee.batch.Task.list()
+
+  # Print the tasks along with their status
+  for task in tasks[:5]:
+      status = task.status()
+      if status['state'] in ['READY', 'RUNNING', 'COMPLETED']:
+        ms = status['start_timestamp_ms']
+        print(f"Task {status['id']} started at {datetime.fromtimestamp(ms/1000.0)}")
+        print(f"Current status: {status['state']}")
+      elif status['state'] == 'FAILED':
+          print(f"Task {status['id']} FAILED")
+          print("   Error Message:", status['error_message'])
+      else:
+          print(status)
 
 def get_predictions(model, test_data):
 
@@ -78,7 +106,6 @@ def plot_classified_images(X_test, df):
 
 def probability_hist(df):
 
-  
   _, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(7, 7))
 
   df2 = df[(df['Prediction'] == 1) & (df['Label'] == 1)]
