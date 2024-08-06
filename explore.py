@@ -1,5 +1,6 @@
 """
-Contains code used for data exploration
+Contains code used for exploring potential training datasets and outputting
+consistently-formatted files for use by other notebooks.
 """
 
 import numpy as np
@@ -105,7 +106,7 @@ def join_farms_and_buildings(farms, buildings, farm_dist, not_farm_dist, crs):
   farm_buildings.loc[:, 'Parent coords'] = farm_buildings.loc[:, 'geometry']
   farm_buildings.loc[:, 'geometry'] = farm_buildings.loc[:, 'buildings_geom']
   cols_to_keep = ['geometry', 'Parent coords', 'Area (sq m)', 'Farm type',\
-                  'N. animals']
+                  'Number of animals']
   farm_buildings = farm_buildings.filter(cols_to_keep).reset_index(drop=True)
 
   # Find the buildings more than <not_farm_dist> from farm coords
@@ -221,7 +222,7 @@ def building_scatterplots(df, dist, animal_type, compare, fname, axes):
 
   # Max building size vs quantity of animals
   for farm in farms:
-    n_animals = farm[1]['N. animals'].unique()[0]
+    n_animals = farm[1]['Number of animals'].unique()[0]
     med_area = farm[1]['Area (sq m)']
     axes[0].scatter(n_animals, med_area, marker='o', s=8, color='k')
   plot_compare(animal_type, 'Area (sq m)', axes[0])
@@ -231,7 +232,7 @@ def building_scatterplots(df, dist, animal_type, compare, fname, axes):
 
   # Max building length vs quantity of animals
   for farm in farms:
-    n_animals = farm[1]['N. animals'].unique()[0]
+    n_animals = farm[1]['Number of animals'].unique()[0]
     med_length = farm[1]['Length (m)'].max()
     axes[1].scatter(n_animals, med_length, marker='o', s=8, color='k')
   plot_compare(animal_type, 'Length (m)', axes[1])
@@ -241,7 +242,7 @@ def building_scatterplots(df, dist, animal_type, compare, fname, axes):
 
   # Max building aspect ratio vs quantity of animals
   for farm in farms:
-    n_animals = farm[1]['N. animals'].unique()[0]
+    n_animals = farm[1]['Number of animals'].unique()[0]
     med_aspect = farm[1]['Aspect ratio'].max()
     axes[2].scatter(n_animals, med_aspect, marker='o', s=8, color='k')
   plot_compare(animal_type, 'Aspect ratio', axes[2])
@@ -284,10 +285,15 @@ def stratified_sample(gdf_farm, gdf_nonfarm, property_name, bins):
 
 def re_order(df):
   """
-  Return a version of df in which the columns are in a standard order
+  Return a version of df in which the columns are in a standard order. Also,
+  convert the Parent coords column from geometry to wkt, to avoid problems
+  with multiple geometry columns in later steps.
   """
+
   columns = ["geometry", "Area (sq m)", "Length (m)", "Aspect ratio",\
-             "Parent coords", "Farm type", "N. animals", "Dataset name"]
+             "Parent coords", "Farm type", "Number of animals", "Dataset name"]
   df = df[columns].reset_index(drop=True)
+  if df["Parent coords"].dtype == 'geometry':
+    df['Parent coords'] = df['Parent coords'].to_wkt()
   
   return df
