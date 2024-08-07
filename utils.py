@@ -18,11 +18,11 @@ def write_to_file(fc, filename, folder):
 
   task.start()
 
-def ee_task_status():
+def ee_task_status(n_tasks=5):
   tasks = ee.batch.Task.list()
 
   # Print the tasks along with their status
-  for task in tasks[:5]:
+  for task in tasks[:n_tasks]:
       status = task.status()
       if status['state'] in ['READY', 'RUNNING', 'COMPLETED']:
         ms = status['start_timestamp_ms']
