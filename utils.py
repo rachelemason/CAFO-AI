@@ -34,10 +34,10 @@ def ee_task_status(n_tasks=5):
       else:
           print(status)
 
-def get_predictions(model, test_data):
+def get_predictions(model, X_test, y_test, metadata):
 
   # Create a copy of the test data to ensure it doesn't get altered by preprocess_input
-  test_processed = np.copy(test_data)
+  test_processed = np.copy(X_test)
 
   # Process the test data in the same way as the training and val data
   test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
@@ -46,25 +46,22 @@ def get_predictions(model, test_data):
   # Use model to obtain predictions on rescaled, mean-subtracted test dataset
   y_pred = model.predict(test_generator)
 
-  # Convert probabilities to **binary** classes using threshold=0.5
-  y_class = (y_pred > 0.5).astype(int)
+  # Create df with ground-truth label, model probabilities, and model class,
+  # where class is the one with the highest probability
+  df = pd.DataFrame(columns=['Label', 'Model Probabilities', 'Model Class'])
+  for idx, (label, prediction) in enumerate(zip(y_test, y_pred)):
+      df.loc[idx, 'Label'] = np.argmax(label) 
+      df.loc[idx, 'Model Probabilities'] = y_pred[idx]
+      df.loc[idx, 'Model Class'] = np.argmax(prediction)
 
-  return y_pred, y_class
-
-
-def collect_results(y_prob, y_test):
-
-  df = pd.DataFrame(columns=['Label', 'Prediction', 'Probability'])
-
-  for idx, (truth, prediction) in enumerate(zip(y_test.astype(int), y_prob)):
-      df.loc[idx, 'Label'] = np.argmax(truth) 
-      df.loc[idx, 'Prediction'] = np.argmax(prediction)
-      df.loc[idx, 'Probability'] = np.max(prediction)
+  # Add metadata
+  for column in metadata.columns:
+    df.loc[:, column] = metadata[column]
 
   return df
 
 
-def plot_classified_images(X_test, df):
+def plot_classified_images(X_test, df, class_mapping, ascending):
 
   def show_images(title):
     plt.figure(figsize=(9, 7))
@@ -74,34 +71,35 @@ def plot_classified_images(X_test, df):
       img = (img / np.max(img)) * 255
       plt.imshow(img.astype(int))
       plt.axis('off')
-      plt.title(f"{df2.loc[idx, 'Probability'] :.2f}", fontsize=9)
+      model_class = class_mapping[df2.loc[idx, 'Model Class']]
+      prob = df2.loc[idx, 'Max prob']
+      plt.title(f"{model_class}: {prob:.2f}",\
+                fontsize=9)
     plt.suptitle(title, fontsize=9)
     plt.tight_layout()
+
+  def get_probs(df2):
+    for idx, row in df2.iterrows():
+      prob = np.max(row['Model Probabilities'])
+      df2.loc[idx, 'Max prob'] = prob
+    df2.sort_values(by=['Max prob'], ascending=ascending, inplace=True)
+    return df2
   
-  df2 = df[(df['Prediction'] == 1) & (df['Label'] == 1)].\
-          sort_values(by='Probability', ascending=False)
-  title = "First 24 images with label=1, prediction=1, ordered by probability"
-  show_images(title)
-  print(f"{df2.shape[0]} of {df.shape[0]} images had label=1, prediction=1")
+  # Correctly-classified images, all categories
+  for category, name in class_mapping.items():
+    df2 = df[(df.loc[:, 'Label'] == category) &\
+             (df.loc[:, 'Label'] == df.loc[:, 'Model Class'])].copy()
+    df2 = get_probs(df2)
+    print(f"{len(df2)} {name} images were correctly classified")
+    show_images(title=f"Label={name}, Prediction={name}")
 
-
-  df2 = df[(df['Prediction'] == 1) & (df['Label'] == 0)].\
-          sort_values(by='Probability', ascending=False)
-  title = "First 24 images with label=0, prediction=1, ordered by probability"
-  show_images(title)
-  print(f"{df2.shape[0]} of {df.shape[0]} images had label=0, prediction=1")
-
-  df2 = df[(df['Prediction'] == 0) & (df['Label'] == 1)].\
-          sort_values(by='Probability', ascending=False)
-  title = "First 24 images with label=1, prediction=0, ordered by probability"
-  show_images(title)
-  print(f"{df2.shape[0]} of {df.shape[0]} images had label=1, prediction=0")
-
-  df2 = df[(df['Prediction'] == 0) & (df['Label'] == 0)].\
-          sort_values(by='Probability', ascending=False)
-  title = "First 24 images with label=0, prediction=0, ordered by probability"
-  show_images(title)
-  print(f"{df2.shape[0]} of {df.shape[0]} images had label=0, prediction=0")
+  # Incorrectly-classified images, all categories
+  for category, name in class_mapping.items():
+    df2 = df[(df.loc[:, 'Label'] == category) &\
+             (df.loc[:, 'Label'] != df.loc[:, 'Model Class'])].copy()
+    df2 = get_probs(df2)
+    print(f"{len(df2)} {name} images were incorrectly classified")
+    show_images(title=f"Label={name}, Prediction=other")
 
 
 def probability_hist(df):
