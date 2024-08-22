@@ -9,28 +9,6 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-
-def describe_data(df, animal_type, size_range, geom_kw, quantity_kw):
-
-  print(f"There are {df.shape[0]} entries in the {animal_type} spreadsheet")
-
-  x = df[~df[geom_kw].isnull()]
-  print(f"{len(x)} farms have valid coordinates")
-
-  x = df[df[quantity_kw] == 0]
-  print(f"{len(x)} farms report 0 {animal_type}")
-
-  print(f"The largest farm reports {df[quantity_kw].max()} {animal_type}")
-
-  x = df[(df[quantity_kw] < size_range[0]) & (df[quantity_kw] > 0)]
-  print(f"There are {len(x)} farms with 0 < {animal_type} < {size_range[0]}")
-  print(f"  - They account for {x[quantity_kw].sum()} {animal_type}")
-
-  x = df[(df[quantity_kw] > size_range[0]) & (df[quantity_kw] < size_range[1])]
-  print(f"There are {x.shape[0]} farms with  {size_range[0]} < {animal_type} < {size_range[1]}")
-  print(f"  - They account for {x[quantity_kw].sum()} {animal_type} \n")
-
-
 def histo(df, ax_a, ax_b, animal, quantity_kw):
 
     # Histogram
@@ -85,6 +63,12 @@ def farms_per_region(df, ax, num, location_kw):
 
 
 def join_farms_and_buildings(farms, buildings, farm_dist, not_farm_dist, crs):
+  """
+  Return a df containing the farms in <farms> and the buildings in <buildings>
+  that are within <farm_dist> of each farm location. Also, return a df
+  containing the buildings that are at least <not_farm_dist> away from any farm
+  location.
+  """
 
   def buffer_gdf(farms, dist):
     temp = farms.to_crs(crs)
@@ -93,20 +77,24 @@ def join_farms_and_buildings(farms, buildings, farm_dist, not_farm_dist, crs):
 
     return temp
 
-  # Find the buildings within <farm_dist> of farm coords
+  # Find the buildings within <farm_distance> of farm coords
 
-  # Buffer the farm/lagoon coordinates
+  # Buffer the farm coordinates
   buffered = buffer_gdf(farms, farm_dist)
   # Create a column to preserve building coords
   buildings.loc[:, 'buildings_geom'] = buildings.loc[:, 'geometry']
   # Inner join on buffered farms with buildings
   farm_buildings = buffered.sjoin(buildings, how='inner', predicate='intersects')
-  # Make the building geometry the primary geometry, retain lagoon geom in a
-  # separate column, then tidy up a bit
+  # Make the building geometry the primary geometry, retain farm geom in a
+  # separate column
   farm_buildings.loc[:, 'Parent coords'] = farm_buildings.loc[:, 'geometry']
   farm_buildings.loc[:, 'geometry'] = farm_buildings.loc[:, 'buildings_geom']
+  # Keep any of these cols, if present; drop a load of other columns which
+  # just make it hard to inspect the df
   cols_to_keep = ['geometry', 'Parent coords', 'Area (sq m)', 'Farm type',\
-                  'Number of animals']
+                  'Number of animals', 'Number of pigs', 'Number of poultry',\
+                  'CAFO class', 'Animal units (pigs)', 'Animal units (poultry)',\
+                  'Animal units (unspecified/other)', 'CRS']
   farm_buildings = farm_buildings.filter(cols_to_keep).reset_index(drop=True)
 
   # Find the buildings more than <not_farm_dist> from farm coords
@@ -205,17 +193,17 @@ def histos(df, axes, bins, title, dmv_data, nc_data):
 def building_scatterplots(df, dist, animal_type, compare, fname, axes):
 
   def axis_stuff(ax):
-    ax.set_xlim(1e2, 2e6)
+    ax.set_xlim(100, 2e6)
     ax.set_xscale('log')
     ax.set_xlabel(f'Reported number of {animal_type.lower()}')
 
   def plot_compare(animal_type, item, ax):
     # Indicate DMV poultry or NC pigs stats
-    if animal_type == 'Poultry':
+    if animal_type == 'Poultry' and compare is not None:
       ax.axhline(compare[item].median(), ls="--", lw=1, color='b')
       ax.axhline(compare[item].min(), ls=":", lw=1, color='b')
       ax.axhline(compare[item].max(), ls=":", lw=1, color='b')
-    elif animal_type == "Pig":
+    elif animal_type == "Pig" and compare is not None:
       ax.axhline(compare[item].median(), ls="--", lw=1, color='b')
 
   farms = df.groupby('Parent coords')
