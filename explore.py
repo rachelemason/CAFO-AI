@@ -3,11 +3,13 @@ Contains code used for exploring potential training datasets and outputting
 consistently-formatted files for use by other notebooks.
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
+import geemap.foliumap as geemap
 
 def histo(df, ax_a, ax_b, animal, quantity_kw):
 
@@ -94,7 +96,8 @@ def join_farms_and_buildings(farms, buildings, farm_dist, not_farm_dist, crs):
   cols_to_keep = ['geometry', 'Parent coords', 'Area (sq m)', 'Farm type',\
                   'Number of animals', 'Number of pigs', 'Number of poultry',\
                   'CAFO class', 'Animal units (pigs)', 'Animal units (poultry)',\
-                  'Animal units (unspecified/other)', 'CRS']
+                  'Animal units (unspecified/other)', 'CRS', 'countryName',\
+                  'Description']
   farm_buildings = farm_buildings.filter(cols_to_keep).reset_index(drop=True)
 
   # Find the buildings more than <not_farm_dist> from farm coords
@@ -269,6 +272,43 @@ def stratified_sample(gdf_farm, gdf_nonfarm, property_name, bins):
           sampled_nonfarm = pd.concat([sampled_nonfarm, sampled_bin_nonfarm])
 
   return sampled_nonfarm
+
+def loop_over_buildings(to_check):
+  """
+  # Loops over all the rows in <to_check> and shows each one in turn on a map.
+  # Type <reject> to add the row to a list of rows to reject
+  """
+
+  os.environ["HYBRID"] = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+
+  viz = {
+      'color': 'yellow',
+      'width': 2,
+      'fillColor': '00000000'
+  }
+
+  rejects = []
+  for n in range(len(to_check)):
+    feature = gpd.GeoDataFrame(to_check.iloc[n]).T.set_geometry('geometry')\
+                                .set_crs("EPSG:4326")
+
+    print(f"Working on feature {n+1} of {len(to_check)}")
+    display(feature)
+    fc = geemap.geopandas_to_ee(feature[['geometry']])
+
+    Map = geemap.Map()
+    Map.centerObject(fc.first().geometry(), 17)
+    Map.add_basemap("HYBRID")
+    Map.addLayer(fc.style(**viz), {}, "Building")
+    display(Map)
+
+    response = input("Enter reject to reject, exit to exit, or any key to continue  ")
+    if response == 'reject':
+      rejects.append(feature.index[0])
+    if response == 'exit':
+      break
+
+  return rejects
 
 
 def re_order(df):
