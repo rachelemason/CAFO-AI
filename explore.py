@@ -51,8 +51,6 @@ def farms_per_region(df, ax, num, location_kw):
   for n, comuna in enumerate(df[location_kw][:10]):
     ax.text(0.98, 0.96-0.05*n, comuna, ha='right', va='center',\
             fontsize=8, transform=ax.transAxes)
-  #  ax.text(labelpos[n].xy[0], 15, comuna.lower(), ha='left', rotation=90,\
-  #          color='r', size=5)
   ax.axvline(num, color='blue', ls='--')
   ax.set_xticks([])
   ax.set_xlabel(f'{location_kw}')
@@ -134,6 +132,21 @@ def get_dimensions(gdf, crs):
 
   return new
 
+
+def define_bins():
+  """
+  Define a consistent set of bins for histograms and stratified sampling, 
+  to be used across all datasets
+  """
+
+  bins = {}
+  bins['Area (sq m)'] = np.linspace(200, 6000, 30)
+  bins['Length (m)'] = np.linspace(0, 280, 30)
+  bins['Aspect ratio'] = np.linspace(0, 20, 30)
+
+  return bins
+
+
 def show_n_save(df, bins, fig_name=None, df_name=None, title=''):
   """
   Plots histograms for a single dataset. Intended for use with the DMV and NC
@@ -159,38 +172,6 @@ def show_n_save(df, bins, fig_name=None, df_name=None, title=''):
   display(stats_df)
   if df_name is not None:
     stats_df.to_pickle(f'/content/drive/MyDrive/CAFO_data/Analysis/{df_name}.pkl')
-
-
-def histos(df, axes, bins, title, dmv_data, nc_data):
-  """
-  Creates histograms of building footprint area, length, and aspect ratio for a
-  dataset with DMV or NC data overlaid. Use with Mexico and Chile datasets.
-  """
-
-  cols = ['Area (sq m)', 'Length (m)', 'Aspect ratio']
-  stats = {}
-
-  for ax, col in zip(axes, cols):
-
-    ax.hist(df[col], bins=bins[col], color='k', histtype='step', density=True,\
-            label=title)
-    stats[col] = (df[col].min(), df[col].median(), df[col].max())
-
-    # Comparison (DMV & NC) data also, labels etc.
-    if title in ["Broiler", "Layer", "Poultry", "Bird"]:
-      ax.hist(dmv_data[col], bins=bins[col], color='b', histtype='stepfilled',\
-              density=True, label="DMV poultry", zorder=0, alpha=0.3)
-
-    elif title == "Pig":
-      ax.hist(nc_data[col], bins=bins[col], color='b', histtype='stepfilled',\
-              density=True, label="NC pigs", zorder=0, alpha=0.3)
-    
-    if col == 'Area (sq m)':
-      ax.legend(fontsize=8)
-      ax.set_ylabel('Frequency')
-
-  stats_df = pd.DataFrame(stats, index=["Min", "Med", "Max"])
-  display(stats_df)
 
 
 def building_scatterplots(df, dist, animal_type, compare, fname, axes):
@@ -272,6 +253,7 @@ def stratified_sample(gdf_farm, gdf_nonfarm, property_name, bins):
           sampled_nonfarm = pd.concat([sampled_nonfarm, sampled_bin_nonfarm])
 
   return sampled_nonfarm
+
 
 def loop_over_buildings(to_check):
   """
