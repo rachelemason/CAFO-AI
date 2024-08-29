@@ -249,10 +249,53 @@ def stratified_sample(gdf_farm, gdf_nonfarm, property_name, bins):
       # Sample the same number of non-farm buildings as there are farm
       # buildings in this bin, add to overall non-farm gdf
       if len(bin_nonfarm) > 0:
-          sampled_bin_nonfarm = bin_nonfarm.sample(farm_hist[i], replace=True)
+          sampled_bin_nonfarm = bin_nonfarm.sample(farm_hist[i],\
+                                                   random_state=42,\
+                                                   replace=True)
           sampled_nonfarm = pd.concat([sampled_nonfarm, sampled_bin_nonfarm])
 
   return sampled_nonfarm
+
+
+def plot_notfarms(farms, notfarms, bins, dataset_name):
+  """
+  Make histograms and aspect-area plots for farm and notfarm samples.
+  """
+
+  _ , axes = plt.subplots(1, 3, figsize=(10, 3.5))
+
+  for ax, col in zip(axes, ["Area (sq m)", "Length (m)", "Aspect ratio"]):
+    ax.hist(farms[col], bins=bins[col], histtype='step', color='k',\
+            label="Farm")
+    ax.hist(notfarms[col], bins=bins[col], histtype='step', color='b',\
+            alpha=0.5, lw=1.5, label="Not-farm")
+    if col == "Area (sq m)":
+      ax.legend(fontsize=8)
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel(col)
+  plt.tight_layout()
+  plt.show()
+  plt.savefig("/content/drive/MyDrive/CAFO_data/Analysis/\
+  {dataset_name}_notfarm_histos.png")
+
+  def axis_stuff(ax, label):
+    ax.set_xlim(150, 5000)
+    ax.set_ylim(0.8, 20)
+    ax.set_xlabel(f'Area (sq m)')
+    ax.set_ylabel(f'Aspect ratio')
+    ax.set_title(label, fontsize=10)
+
+  _, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+  ax1.plot(farms["Area (sq m)"], farms["Aspect ratio"], 'ko', ms=2)
+  axis_stuff(ax1, "Farm buildings")
+  ax2.plot(notfarms["Area (sq m)"], notfarms["Aspect ratio"], 'bo', ms=2,\
+   alpha=0.3)
+  axis_stuff(ax2, "Not-farm buildings")
+  plt.tight_layout()
+  plt.show()
+  plt.savefig("/content/drive/MyDrive/CAFO_data/Analysis/\
+  {dataset_name}_notfarm_aspect_area.png")
+
 
 
 def loop_over_buildings(to_check):
