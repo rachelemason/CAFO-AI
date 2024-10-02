@@ -73,7 +73,8 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
       plt.axis('off')
       model_class = class_mapping[df2.loc[idx, 'Model Class']]
       prob = df2.loc[idx, 'Max prob']
-      plt.title(f"{model_class}: {prob:.2f}",\
+      dataset = df2.loc[idx, 'Dataset name']
+      plt.title(f"{model_class}: {prob:.2f} ({dataset[:3]})",\
                 fontsize=9)
     plt.suptitle(title, fontsize=9)
     plt.tight_layout()
@@ -84,7 +85,7 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
       df2.loc[idx, 'Max prob'] = prob
     df2.sort_values(by=['Max prob'], ascending=ascending, inplace=True)
     return df2
-  
+
   # Correctly-classified images, all categories
   for category, name in class_mapping.items():
     df2 = df[(df.loc[:, 'Label'] == category) &\
