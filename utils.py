@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from keras.applications.vgg16 import preprocess_input
+from keras.applications.vgg16 import preprocess_input as preprocess_input_vgg16
+from keras.applications.efficientnet import preprocess_input as preprocess_input_efficientnet
+
 import ee
 
 
@@ -34,13 +36,19 @@ def ee_task_status(n_tasks=5):
       else:
           print(status)
 
-def get_predictions(model, X_test, y_test, metadata):
+def get_predictions(model, X_test, y_test, preprocessing, metadata):
 
   # Create a copy of the test data to ensure it doesn't get altered by preprocess_input
   test_processed = np.copy(X_test)
 
   # Process the test data in the same way as the training and val data
-  test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
+  if preprocessing == "VGG16":
+    test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input_vgg16)
+  elif preprocessing == "EfficientNet":
+    test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input_efficientnet)
+  else:
+    raise ValueError("Preprocessing function must be one of VGG16|EfficientNet")
+
   test_generator = test_datagen.flow(test_processed, batch_size=32, shuffle=False)
 
   # Use model to obtain predictions on rescaled, mean-subtracted test dataset
