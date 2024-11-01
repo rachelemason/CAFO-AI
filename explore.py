@@ -206,7 +206,7 @@ def plot_notfarms(farms, notfarms, bins, dataset_name):
 
 
 
-def loop_over_buildings(to_check):
+def loop_over_buildings(to_check, column="geometry"):
   """
   # Loops over all the rows in <to_check> and shows each one in turn on a map.
   # Type <reject> to add the row to a list of rows to reject
@@ -222,12 +222,17 @@ def loop_over_buildings(to_check):
 
   rejects = []
   for n in range(len(to_check)):
-    feature = gpd.GeoDataFrame(to_check.iloc[n]).T.set_geometry('geometry')\
+    feature = gpd.GeoDataFrame(to_check.iloc[n]).T.set_geometry("geometry")\
                                 .set_crs("EPSG:4326")
+
+    if column != "geometry":
+      feature = feature.drop(columns=["geometry"]).rename(columns={column:"geometry"}) 
+      feature['geometry'] = gpd.GeoSeries.from_wkt(feature['geometry'])
+      feature = feature.set_geometry("geometry").set_crs("EPSG:4326")
 
     print(f"Working on feature {n+1} of {len(to_check)}")
     display(feature)
-    fc = geemap.geopandas_to_ee(feature[['geometry']])
+    fc = geemap.geopandas_to_ee(feature[["geometry"]])
 
     Map = geemap.Map()
     Map.centerObject(fc.first().geometry(), 17)
