@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.applications.vgg16 import preprocess_input as preprocess_input_vgg16
 from keras.applications.efficientnet import preprocess_input as preprocess_input_efficientnet
+from keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
 
 import ee
 
@@ -44,10 +45,13 @@ def get_predictions(model, X_test, y_test, preprocessing, metadata):
   # Process the test data in the same way as the training and val data
   if preprocessing == "VGG16":
     test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input_vgg16)
-  elif preprocessing == "EfficientNet":
+  elif "EfficientNet" in preprocessing:
     test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input_efficientnet)
+  elif preprocessing == "ResNet50":
+    test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input_resnet)
   else:
-    raise ValueError("Preprocessing function must be one of VGG16|EfficientNet")
+    raise ValueError("Preprocessing function must be one of\
+     VGG16|EfficientNetXX|ResNet50")
 
   test_generator = test_datagen.flow(test_processed, batch_size=32, shuffle=False)
 
