@@ -2,15 +2,20 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import cv2
+import tensorflow as tf
+from tensorflow.keras.models import Model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from keras.applications.vgg16 import preprocess_input as preprocess_input_vgg16
 from keras.applications.efficientnet import preprocess_input as preprocess_input_efficientnet
 from keras.applications.resnet50 import preprocess_input as preprocess_input_resnet
-
 import ee
 
 
 def write_to_file(fc, filename, folder):
+  """
+  Write an Earth Engine featureCollection to a Google Drive file.
+  """
 
   task = ee.batch.Export.table.toDrive(
         collection=fc,
@@ -21,7 +26,13 @@ def write_to_file(fc, filename, folder):
 
   task.start()
 
+
 def ee_task_status(n_tasks=5):
+  """
+  Print the status of the last <n_tasks> Earth Engine tasks (e.g. writing to
+  file)
+  """
+
   tasks = ee.batch.Task.list()
 
   # Print the tasks along with their status
@@ -37,7 +48,12 @@ def ee_task_status(n_tasks=5):
       else:
           print(status)
 
+
 def get_predictions(model, X_test, y_test, preprocessing, metadata):
+  """
+  Return a df of model predictions for test data, including associated
+  metadata
+  """
 
   # Create a copy of the test data to ensure it doesn't get altered by preprocess_input
   test_processed = np.copy(X_test)
@@ -74,11 +90,15 @@ def get_predictions(model, X_test, y_test, preprocessing, metadata):
 
 
 def plot_classified_images(X_test, df, class_mapping, ascending):
+  """
+  Make a set of plots showing images that have been correctly and incorrectly
+  classified, separated into CAFO and not-CAFO classes.
+  """
 
   def show_images(title):
-    plt.figure(figsize=(9, 7))
-    for i, idx in enumerate(df2.index[:24]):
-      plt.subplot(4, 6, i+1)
+    plt.figure(figsize=(9, 56))
+    for i, idx in enumerate(df2.index[:192]):
+      plt.subplot(32, 6, i+1)
       img = X_test[idx].reshape(64, 64, 3)
       img = (img / np.max(img)) * 255
       plt.imshow(img.astype(int))
@@ -147,3 +167,124 @@ def probability_hist(df):
   ax3.set_ylabel("Frequency")
   
   plt.tight_layout()
+
+
+def select_test_image(test_data, model, results_df, prediction, label,\
+                      probability_range=(0.99, 1.0)):
+  """
+  Return a randomly-selected image for which the label and model prediction
+  match the stated criteria, and a version preprocessed for the relevant model.
+  """
+  
+  # Some prep work
+  df = pd.DataFrame()
+  df['Probability_0'] = results_df['Model Probabilities'].apply(lambda x: x[0])
+  df['Probability_1'] = results_df['Model Probabilities'].apply(lambda x: x[1])
+  df['Label'] = results_df['Label']
+
+  # Select an image matching criteria
+  df = df[df["Label"] == label]
+  if prediction == label:
+    df = df[df["Label"] == prediction]
+  else:
+    df = df[df["Label"] != prediction]
+
+  df = df[(df[f'Probability_{str(prediction)}'] > probability_range[0]) &\
+          (df[f'Probability_{str(prediction)}'] <= probability_range[1])]
+
+  print(f"Sampling one of {len(df)} images")
+  test_idx = df.sample(1).index.values[0]
+  test_img = test_data[test_idx]
+
+  # Create a version that is scaled for imshow
+  img = ((test_img / np.max(test_img)) * 255).astype("uint8")
+
+  # Create a version that is preprocessed in the same way as the training data
+  if model == "VGG16":
+    preprocessed_image = preprocess_input_vgg16(test_img)
+  elif "EfficientNet" in model:
+    preprocessed_image = preprocess_input_efficientnet(test_img)
+  elif model == "ResNet50":
+    preprocessed_image = preprocess_input_resnet(test_img)
+  else:
+    raise ValueError("Model must be one of VGG16|EfficientNetXX|ResNet50")
+  
+  # Add batch dimension to the processed image
+  preprocessed_image = np.expand_dims(preprocessed_image, axis=0)  
+
+  return img, preprocessed_image
+
+
+def get_gradcam_heatmap(model, image, last_conv_layer_name, class_index):
+  """
+  Given a trained model and a preprocessed image output by select_test_image,
+  return the gradient heatmap for the specified image class/category/label
+  and concolutional layer
+  """
+
+  # Create a model that outputs the feature map and predictions
+  grad_model = Model([model.inputs],
+      [model.get_layer(last_conv_layer_name).output, model.output])
+
+  # Record operations for automatic differentiation
+  with tf.GradientTape() as tape:
+      conv_outputs, predictions = grad_model(image)  # Forward pass
+      loss = predictions[:, class_index]  # Get the prediction for the target class
+
+  # Calculate gradients with respect to the chosen class
+  grads = tape.gradient(loss, conv_outputs)
+
+  # Calculate the mean intensity of the gradients over the width and height
+  # This gives the "importance" of each feature map channel
+  pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+  # Multiply each channel in the feature map array by its importance
+  conv_outputs = conv_outputs[0]  # Remove the batch dimension
+  heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+
+  # Apply ReLU to the heatmap (only keep positive values)
+  heatmap = np.maximum(heatmap, 0)
+
+  # Normalize the heatmap to range [0, 1]
+  heatmap /= np.max(heatmap) if np.max(heatmap) != 0 else 1
+
+  return heatmap
+
+
+def display_gradcam(image, heatmap, alpha=0.5):
+  """
+  Display a test image from select_test_image, and a gradient heatmap from
+  get_gradcam_heatmap.
+  """
+
+  # Resize heatmap to match the original image size
+  heatmap_resized = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+
+  # Convert the heatmap to an RGB color map
+  heatmap_colored = plt.get_cmap("jet")(heatmap_resized)
+
+  # Display the original image
+  plt.figure(figsize=(8, 8))
+  plt.subplot(2, 2, 1)
+  plt.imshow(image)
+  plt.axis("off")
+
+  # Overlay the Grad-CAM heatmap
+  plt.subplot(2, 2, 2)
+  plt.imshow(image)
+  plt.imshow(heatmap_colored, alpha=alpha)
+  plt.axis("off")
+
+  # Same with a contrast-adjusted image
+  plt.subplot(2, 2, 3)
+  adjusted = cv2.convertScaleAbs(image, alpha=3, beta=1)
+  plt.imshow(adjusted)
+  plt.axis("off")
+
+  plt.subplot(2, 2, 4)
+  plt.imshow(adjusted)
+  plt.imshow(heatmap_colored, alpha=alpha)
+  plt.axis("off")
+
+  plt.tight_layout()
+
