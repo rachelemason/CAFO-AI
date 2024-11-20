@@ -135,35 +135,41 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
     show_images(title=f"Label={name}, Prediction=other")
 
 
-def probability_hist(df):
+def probability_hist(df, datasets, ymax=50):
+  """
+  Create histograms showing model probabilities for correctly-
+  and incorrectly classified CAFOs and not-CAFOs.
+  """
 
-  _, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(7, 7))
+  _, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(6, 9))
 
-  df2 = df[(df['Prediction'] == 1) & (df['Label'] == 1)]
-  ax1.hist(df2['Probability'], bins=50, density=True, stacked=True)
-  ax1.set_xlim(0.5, 1)
-  ax1.set_ylim(0, 50)
-  ax1.set_title('Label=1, Prediction=1', fontsize=9)
+  bins = np.linspace(0.5, 1.0, 50)
+  if 'Probability_0' not in df.columns:
+    df['Probability_0'] = df['Model Probabilities'].apply(lambda x: x[0])
+    df['Probability_1'] = df['Model Probabilities'].apply(lambda x: x[1])
+  
+  def subplot_hist(df, label, pred, ax):
+    for name, color in zip(datasets, ["k", "b", "r", "g"]):
+      to_plot = df[df["Dataset name"] == name]
+      ax.hist(to_plot[f'Probability_{pred}'], bins=bins, histtype='step',\
+              color=color)
+    ax.set_xlim(0.5, 1)
+    ax.set_ylim(0, ymax)
+    ax.set_title(f'Label={label}, Prediction={pred}', fontsize=9)
 
-  df2 = df[(df['Prediction'] == 1) & (df['Label'] == 0)]
-  ax2.hist(df2['Probability'], bins=50, density=True, stacked=True)
-  ax2.set_xlim(0.5, 1)
-  ax2.set_ylim(0, 50)
-  ax2.set_title('Label=0, Prediction=1', fontsize=9)
+  df2 = df[(df['Model Class'] == 1) & (df['Label'] == 1)]
+  subplot_hist(df2, 1, 1, ax1)
 
-  df2 = df[(df['Prediction'] == 0) & (df['Label'] == 1)]
-  ax3.hist(df2['Probability'], bins=50, density=True, stacked=True)
-  ax3.set_xlim(0.5, 1)
-  ax3.set_ylim(0, 50)
-  ax3.set_title('Label=1, Prediction=0', fontsize=9)
+  df2 = df[(df['Model Class'] == 1) & (df['Label'] == 0)]
+  subplot_hist(df2, 0, 1, ax2)
 
-  df2 = df[(df['Prediction'] == 0) & (df['Label'] == 0)]
-  ax4.hist(df2['Probability'], bins=50, density=True, stacked=True)
-  ax4.set_xlim(0.5, 1)
-  ax4.set_ylim(0, 50)
-  ax4.set_title('Label=0, Prediction=0', fontsize=9)
+  df2 = df[(df['Model Class'] == 0) & (df['Label'] == 1)]
+  subplot_hist(df2, 1, 0, ax3)
 
-  ax3.set_xlabel("CAFO probability")
+  df2 = df[(df['Model Class'] == 0) & (df['Label'] == 0)]
+  subplot_hist(df2, 0, 0, ax4)
+
+  ax4.set_xlabel(f"Probability")
   ax3.set_ylabel("Frequency")
   
   plt.tight_layout()
@@ -181,6 +187,7 @@ def select_test_image(test_data, model, results_df, prediction, label,\
   df['Probability_0'] = results_df['Model Probabilities'].apply(lambda x: x[0])
   df['Probability_1'] = results_df['Model Probabilities'].apply(lambda x: x[1])
   df['Label'] = results_df['Label']
+  df['Dataset'] = results_df['Dataset name']
 
   # Select an image matching criteria
   df = df[df["Label"] == label]
@@ -192,20 +199,22 @@ def select_test_image(test_data, model, results_df, prediction, label,\
   df = df[(df[f'Probability_{str(prediction)}'] > probability_range[0]) &\
           (df[f'Probability_{str(prediction)}'] <= probability_range[1])]
 
-  print(f"Sampling one of {len(df)} images")
-  test_idx = df.sample(1).index.values[0]
-  test_img = test_data[test_idx]
+  df = df.sample(1)
+  print(f"Dataset: {df['Dataset'].values[0]}")
+  print(f"Probability = {df[f'Probability_{str(prediction)}'].values[0]:.2f}")
+  test_img = test_data[df.index.values[0]]
 
   # Create a version that is scaled for imshow
   img = ((test_img / np.max(test_img)) * 255).astype("uint8")
 
   # Create a version that is preprocessed in the same way as the training data
+  for_processing = test_img.copy()
   if model == "VGG16":
-    preprocessed_image = preprocess_input_vgg16(test_img)
+    preprocessed_image = preprocess_input_vgg16(for_processing)
   elif "EfficientNet" in model:
-    preprocessed_image = preprocess_input_efficientnet(test_img)
+    preprocessed_image = preprocess_input_efficientnet(for_processing)
   elif model == "ResNet50":
-    preprocessed_image = preprocess_input_resnet(test_img)
+    preprocessed_image = preprocess_input_resnet(for_processing)
   else:
     raise ValueError("Model must be one of VGG16|EfficientNetXX|ResNet50")
   
