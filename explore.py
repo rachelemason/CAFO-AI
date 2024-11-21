@@ -205,8 +205,7 @@ def plot_notfarms(farms, notfarms, bins, dataset_name):
   {dataset_name}_notfarm_aspect_area.png")
 
 
-
-def loop_over_buildings(to_check, column="geometry"):
+def loop_over_buildings(to_check, column="geometry", sentinel=None):
   """
   # Loops over all the rows in <to_check> and shows each one in turn on a map.
   # Type <reject> to add the row to a list of rows to reject
@@ -218,6 +217,12 @@ def loop_over_buildings(to_check, column="geometry"):
       'color': 'yellow',
       'width': 2,
       'fillColor': '00000000'
+  }
+
+  sentinel_viz = {
+    'min': 0.0,
+    'max': 2500,
+    'bands': ['B4', 'B3', 'B2'],
   }
 
   rejects = []
@@ -237,6 +242,9 @@ def loop_over_buildings(to_check, column="geometry"):
     Map = geemap.Map()
     Map.centerObject(fc.first().geometry(), 17)
     Map.add_basemap("HYBRID")
+    if sentinel is not None:
+      print('here')
+      Map.addLayer(sentinel, sentinel_viz, "Sentinel")
     Map.addLayer(fc.style(**viz), {}, "Building")
     display(Map)
 
