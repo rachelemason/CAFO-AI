@@ -205,7 +205,7 @@ def plot_notfarms(farms, notfarms, bins, dataset_name):
   {dataset_name}_notfarm_aspect_area.png")
 
 
-def loop_over_buildings(to_check, column="geometry", sentinel=None):
+def loop_over_buildings(to_check, column="geometry", sentinel=None, radius=240):
   """
   # Loops over all the rows in <to_check> and shows each one in turn on a map.
   # Type <reject> to add the row to a list of rows to reject
@@ -215,6 +215,12 @@ def loop_over_buildings(to_check, column="geometry", sentinel=None):
 
   viz = {
       'color': 'yellow',
+      'width': 2,
+      'fillColor': '00000000'
+  }
+
+  viz2 = {
+      'color': 'red',
       'width': 2,
       'fillColor': '00000000'
   }
@@ -239,6 +245,11 @@ def loop_over_buildings(to_check, column="geometry", sentinel=None):
     display(feature)
     fc = geemap.geopandas_to_ee(feature[["geometry"]])
 
+    #get the image extent
+    def buffer_and_bound(feature, buffer_radius=radius):
+      return feature.centroid().buffer(buffer_radius, 2).bounds()
+    img_extent = fc.map(buffer_and_bound)
+
     Map = geemap.Map()
     Map.centerObject(fc.first().geometry(), 17)
     Map.add_basemap("HYBRID")
@@ -246,6 +257,7 @@ def loop_over_buildings(to_check, column="geometry", sentinel=None):
       print('here')
       Map.addLayer(sentinel, sentinel_viz, "Sentinel")
     Map.addLayer(fc.style(**viz), {}, "Building")
+    Map.addLayer(img_extent.style(**viz2), {}, "Image extent")
     display(Map)
 
     response = input("Enter reject to reject, exit to exit, or any key to continue  ")
