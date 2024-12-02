@@ -159,7 +159,7 @@ def stratified_sample(gdf_farm, gdf_nonfarm, property_name, bins,\
           num = int(farm_hist[i] * factor)
           sampled_bin_nonfarm = bin_nonfarm.sample(num,\
                                                    random_state=42,\
-                                                   replace=True)
+                                                   replace=False)
           sampled_nonfarm = pd.concat([sampled_nonfarm, sampled_bin_nonfarm])
 
   return sampled_nonfarm
