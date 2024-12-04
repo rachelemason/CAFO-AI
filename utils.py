@@ -122,17 +122,23 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
   for category, name in class_mapping.items():
     df2 = df[(df.loc[:, 'Label'] == category) &\
              (df.loc[:, 'Label'] == df.loc[:, 'Model Class'])].copy()
-    df2 = get_probs(df2)
-    print(f"{len(df2)} {name} images were correctly classified")
-    show_images(title=f"Label={name}, Prediction={name}")
+    if len(df2) > 0:
+      df2 = get_probs(df2)
+      print(f"{len(df2)} {name} images were correctly classified")
+      show_images(title=f"Label={name}, Prediction={name}")
+    else:
+      print(f"0 {name} images were correctly classified")
 
   # Incorrectly-classified images, all categories
   for category, name in class_mapping.items():
     df2 = df[(df.loc[:, 'Label'] == category) &\
              (df.loc[:, 'Label'] != df.loc[:, 'Model Class'])].copy()
-    df2 = get_probs(df2)
-    print(f"{len(df2)} {name} images were incorrectly classified")
-    show_images(title=f"Label={name}, Prediction=other")
+    if len(df2) > 0:
+      df2 = get_probs(df2)
+      print(f"{len(df2)} {name} images were incorrectly classified")
+      show_images(title=f"Label={name}, Prediction=other")
+    else:
+      print(f"0 {name} images were incorrectly classified")
 
 
 def probability_hist(df, datasets, ymax=50):
