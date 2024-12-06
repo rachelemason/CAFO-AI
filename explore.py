@@ -52,8 +52,13 @@ def get_buildings(area, min_building_size, country_code):
   buildings_fc = (
       ee.FeatureCollection(f"projects/sat-io/open-datasets/VIDA_COMBINED/{country_code}")
       .filter(ee.Filter.gt('area_in_meters', min_building_size))
-      .filterBounds(geom)
   )
+
+  # For some reason, if there are no buildings in the filtered and this command
+  # is incorporated in the previous statement, it fails and can't be caught
+  # using a try/except block. Seems to work as a stand-alone command though??
+
+  buildings_fc = buildings_fc.filterBounds(geom)
 
   return buildings_fc, geom
 
