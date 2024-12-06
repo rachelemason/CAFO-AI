@@ -1,6 +1,6 @@
 """
-Contains code used for exploring potential training datasets and outputting
-consistently-formatted files for use by other notebooks.
+Contains code used for exploring potential training/test/application datasets
+and outputting consistently-formatted files for use by other notebooks.
 """
 
 import os
@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
+import ee
 import geemap.foliumap as geemap
 
 def histo(df, ax_a, ax_b, animal, quantity_kw):
@@ -37,6 +38,24 @@ def histo(df, ax_a, ax_b, animal, quantity_kw):
                     rotation=45, ha='center')
     ax_b.set_xlabel(f'Number of {animal} on farm')
     ax_b.set_ylabel(f'Cumulative number of {animal}')
+
+
+def get_buildings(area, min_building_size, country_code):
+  """
+  Return a feature collection of buildings > min_building_size within the
+  specified boundary, along with the region boundary in ee format.
+  """
+
+  gdf = gpd.GeoDataFrame(crs="EPSG:4326", geometry=[area["Boundary"]])
+  geom = geemap.geopandas_to_ee(gdf[['geometry']])
+
+  buildings_fc = (
+      ee.FeatureCollection(f"projects/sat-io/open-datasets/VIDA_COMBINED/{country_code}")
+      .filter(ee.Filter.gt('area_in_meters', min_building_size))
+      .filterBounds(geom)
+  )
+
+  return buildings_fc, geom
 
 
 def join_farms_and_buildings(farms, buildings, farm_dist, not_farm_dist, crs):
@@ -267,6 +286,67 @@ def loop_over_buildings(to_check, column="geometry", sentinel=None, radius=240):
       break
 
   return rejects
+
+
+def merge_and_make_box(area, buildings_fc, within=40):
+  """
+  For use in defining farms- and not-farms in test and model application regions.
+  Combine closely-spaced buildings into a single polygon, and select the largest
+  building within that polygon. This is analogous to what we do when selecting
+  the largest building per set of farm coordinates when creating the training
+  datasets, except here we don't have any actual farm coordinates, so we use
+  clusters of buildings instead. Returns the merged area boundaries for
+  visualization, and the geometry (polygon) of each one's largest building.
+  """
+
+  buildings = geemap.ee_to_gdf(buildings_fc)
+  buildings = buildings.to_crs(area["CRS"])
+  saved_geoms = buildings["geometry"]
+
+  # create a polygon for each cluster of buildings by buffering and merging
+  geoms = buildings.buffer(within).geometry.union_all()
+  merged = gpd.GeoDataFrame(geometry=[geoms]).set_crs(area["CRS"])
+  merged = merged.explode().reset_index(drop=True)
+
+  # identify all the buildings within each polygon and select the largest
+  intersecting = gpd.sjoin(merged, buildings, how="left", predicate="intersects")
+  largest = intersecting.sort_values(by=["area_in_meters"], ascending=False)\
+                        .groupby(level=0).head(1)
+
+  # give each building its correct geometry (as opposed to the cluster polygon)
+  temp = largest.join(saved_geoms, on="index_right", rsuffix='orig')
+  largest = temp.drop(columns=['geometry', 'index_right']).\
+            rename(columns={'geometryorig': 'geometry'}).\
+            set_geometry('geometry').to_crs("EPSG:4326")
+
+  # remove buildings that intersect with boundary edges, as they'd be discarded
+  # when the Sentinel images are created, anyway
+  largest = largest.sjoin(area["Boundary gdf"], how="inner", predicate="within")
+  largest = largest.drop(columns=["index_right"]).reset_index(drop=True)
+
+  print(f"Went from {len(buildings)} buildings to {len(largest)} boxes")
+
+  return merged, largest
+
+
+def get_sentinel(area, boundary, sentinel_bands, year=2023):
+  """
+  Get Sentinel data for an area
+  """
+
+  gdf = gpd.GeoDataFrame(crs="EPSG:4326", geometry=[area["Boundary"]])
+  geom = geemap.geopandas_to_ee(gdf[['geometry']])
+
+  sentinel = (
+      ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+      .filterDate(f'{year}-01-01', f'{year}-12-31')
+      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
+      .select(sentinel_bands)
+      .median() #crude cloud filter
+      .clip(boundary)
+  )
+
+  return sentinel
 
 
 def re_order(df):
