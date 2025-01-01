@@ -84,7 +84,7 @@ def get_predictions(model, X_test, y_test, preprocessing, metadata):
 
   # Add metadata
   for column in metadata.columns:
-    df.loc[:, column] = metadata[column]
+      df.loc[:, column] = metadata[column]
 
   return df
 
@@ -141,44 +141,87 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
       print(f"0 {name} images were incorrectly classified")
 
 
-def probability_hist(df, datasets, ymax=50):
+def probability_hist(df, ymax, fname):
   """
-  Create histograms showing model probabilities for correctly-
-  and incorrectly classified CAFOs and not-CAFOs.
+  Create histograms showing model probabilities CAFOs and not-CAFO
+  classes.
   """
 
-  _, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(6, 9))
+  f, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2, 2, figsize=(6, 5))
 
-  bins = np.linspace(0.5, 1.0, 50)
+  bins = np.linspace(0, 1.0, 100)
   if 'Probability_0' not in df.columns:
     df['Probability_0'] = df['Model Probabilities'].apply(lambda x: x[0])
     df['Probability_1'] = df['Model Probabilities'].apply(lambda x: x[1])
-  
-  def subplot_hist(df, label, pred, ax):
-    for name, color in zip(datasets, ["k", "b", "r", "g"]):
-      to_plot = df[df["Dataset name"] == name]
-      ax.hist(to_plot[f'Probability_{pred}'], bins=bins, histtype='step',\
-              color=color)
-    ax.set_xlim(0.5, 1)
+
+  # Separate dfs for CAFO and not-CAFO images
+  df0 = df[df['Label'] == 0]
+  df1 = df[df['Label'] == 1]
+
+  # Histograms
+
+  ax0a = ax0.twinx()
+  ax0.hist(df0['Probability_0'], bins=bins, histtype='step', color='0.3')
+  ax0a.hist(df0['Probability_0'], bins=bins, histtype='step', color='0.7',\
+  cumulative=True, density=True, ls=":")
+ 
+  ax0.set_title(f'{len(df0)} CAFO images', fontsize=8)
+  ax0.axhline(y=320, xmin=0.05, xmax=0.2, color='0.3', ls='-', lw=1)
+  ax0.text(0.24, 0.95, 'Frequency', va='top', ha='left',\
+           transform=ax0.transAxes, fontsize=8)
+  ax0.axhline(y=290, xmin=0.05, xmax=0.2, color='0.7', ls=':')
+  ax0.text(0.24, 0.85, 'Cumulative frequency', va='top', ha='left',\
+           transform=ax0.transAxes, fontsize=8)
+  ax0.set_xlabel("CAFO Probability", fontsize=8)
+
+  ax1a = ax1.twinx()
+  ax1.hist(df1['Probability_1'], bins=bins, histtype='step', color='0.3')
+  ax1a.hist(df1['Probability_1'], bins=bins, histtype='step', color='0.7',\
+  cumulative=True, density=True, ls=":")
+  ax1.set_title(f'{len(df1)} not-CAFO images', fontsize=8)
+  ax1.set_xlabel("not-CAFO Probability", fontsize=8)
+
+  for ax in (ax0, ax1):
+    ax.set_xlim(0, 1)
     ax.set_ylim(0, ymax)
-    ax.set_title(f'Label={label}, Prediction={pred}', fontsize=9)
+    ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.tick_params(axis='both', labelsize=8)
+    ax.tick_params(axis='y', rotation=90)
+    ax.set_ylabel("Frequency", fontsize=8)
 
-  df2 = df[(df['Model Class'] == 1) & (df['Label'] == 1)]
-  subplot_hist(df2, 1, 1, ax1)
+  for ax in (ax0a, ax1a):
+    ax.set_ylabel("Cumulative frequency", fontsize=8)
+    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.tick_params(axis='both', rotation=90, labelsize=8)
 
-  df2 = df[(df['Model Class'] == 1) & (df['Label'] == 0)]
-  subplot_hist(df2, 0, 1, ax2)
 
-  df2 = df[(df['Model Class'] == 0) & (df['Label'] == 1)]
-  subplot_hist(df2, 1, 0, ax3)
+  # Aspect-area
 
-  df2 = df[(df['Model Class'] == 0) & (df['Label'] == 0)]
-  subplot_hist(df2, 0, 0, ax4)
+  cmap = 'RdYlBu_r'
+  pts = ax2.scatter(df0["Area (sq m)"], df0["Aspect ratio"],\
+                    c=df0['Probability_0'], s=3, cmap=cmap)
+  cax = f.add_axes([0.45, 0.11, 0.015, 0.336])
+  c1 = f.colorbar(pts, cax=cax)
 
-  ax4.set_xlabel(f"Probability")
-  ax3.set_ylabel("Frequency")
+  pts = ax3.scatter(df1["Area (sq m)"], df1["Aspect ratio"],\
+                    c=df1['Probability_1'], s=3, cmap=cmap)
+  cax = f.add_axes([0.908, 0.11, 0.015, 0.336])
+  c2 = f.colorbar(pts, cax=cax)
+
+  for cbar in (c1, c2):
+    cbar.ax.tick_params(labelsize=8, labelrotation=90)
+
+  for ax in (ax2, ax3):
+    ax.tick_params(axis='both', labelsize=8)
+    ax.tick_params(axis='y', rotation=90, labelsize=8)
+    ax.set_xlim(700, 5999)
+    ax.set_ylim(0.8, 20)
+    ax.set_yticks([5, 10, 15, 20])
+    ax.set_xlabel("Area (sq m)", fontsize=8)
+    ax.set_ylabel("Aspect ratio", fontsize=8)
   
-  plt.tight_layout()
+  plt.subplots_adjust(wspace=0.45, hspace=0.3)
+  plt.savefig(f'/content/drive/MyDrive/CAFO_data/Analysis/{fname}.png')
 
 
 def select_test_image(test_data, model, results_df, prediction, label,\
