@@ -140,6 +140,45 @@ def plot_classified_images(X_test, df, class_mapping, ascending):
     else:
       print(f"0 {name} images were incorrectly classified")
 
+def show_random_images(dfs, label, min_prob, fname, rand=42):
+  """
+  Given a results dataset, create a 5x4 mosaic of randomly-selected
+  images with label=label and CAFO probability > min_prob
+  """
+
+  df_list = []
+  count = 0
+  for df in dfs:
+    df = df[(df["Probability_0"] > min_prob) & (df["Label"] == label)]
+    count += len(df)
+    # Sample 2 images if possible, then try 1, then just move on if no
+    # images meet the criteria
+    try:
+      df = df.sample(2, random_state=rand)
+    except ValueError:
+      try:
+        df = df.sample(1, random_state=rand)
+      except ValueError:
+        continue
+    df_list.append(df)
+
+  df = pd.concat(df_list)
+  print(f"{count} images have label = {label} and p(CAFO) > {min_prob}")
+
+  _, axes = plt.subplots(5, 4, figsize=(5, 7))
+  for ax, img, loc in zip(axes.flatten(), df["Sentinel"], df['Dataset name']):
+      img = img.reshape(64, 64, 3)
+      img = (img / np.max(img)) * 255
+      ax.imshow(img.astype(int))
+      ax.set_title(loc, fontsize=8)
+  # Make things look nice even if there aren't enough images to fill the
+  # subplots
+  for ax in axes.flatten():
+     ax.axis('off')
+
+  plt.savefig(f'/content/drive/MyDrive/CAFO_data/Analysis/{fname}.png',\
+  dpi=450)
+
 
 def probability_hist(df, ymax, fname):
   """
@@ -221,7 +260,8 @@ def probability_hist(df, ymax, fname):
     ax.set_ylabel("Aspect ratio", fontsize=8)
   
   plt.subplots_adjust(wspace=0.45, hspace=0.3)
-  plt.savefig(f'/content/drive/MyDrive/CAFO_data/Analysis/{fname}.png')
+  plt.savefig(f'/content/drive/MyDrive/CAFO_data/Analysis/{fname}.png',\
+  dpi=450)
 
 
 def select_test_image(test_data, model, results_df, prediction, label,\
