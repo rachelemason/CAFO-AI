@@ -10,8 +10,11 @@ Notebooks 1-8 illustrate the process of creating training and testing datasets. 
   - Notebook 8: Sentinel data for all of the above.
 
 Notebook 9: Model setup and training
+
 Notebook 10: Correction of mislabeled training data based on the output of notebook 9 (then notebook 9 is rerun)
+
 Notebook 11: Trained model is used to make predictions for the held-out test regions
+
 Notebook 12: Trained model is used to make predictions for the unlabeled model application regions
 
 utils.py, explore.py: Called by various notebooks.
